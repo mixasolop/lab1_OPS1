@@ -44,6 +44,23 @@ void usage(int argc, char** argv)
     exit(EXIT_FAILURE);
 }
 
+
+int walk(const char *name, const struct stat *s, int type, struct FTW *f)
+{
+    if(type == FTW_F){
+        if(chdir("index/by_visible_title") == -1){
+            ERR("chdir");
+        }
+        char* str = join_paths("../../",name);
+        symlink(str, &name[f->base]);
+        if(chdir("../..") == -1){
+            ERR("chdir");
+        }
+        free(str);
+    }
+    return 0;
+}
+
 void parser(FILE* fptr){
     char* lineptr = NULL;
     size_t n = -1;
@@ -96,14 +113,11 @@ void parser(FILE* fptr){
 }
 
 int main(int argc, char** argv) { 
-    if(argc != 2){
-        usage(argc, argv);
+    if(mkdir("index", 0755) == -1)
+        ERR("mkdir");
+    if(mkdir("index/by_visible_title", 0755) == -1)
+        ERR("mkdir");
+    if(nftw("library", walk, 100, FTW_PHYS) != 0){
+        ERR("nftw");
     }
-    FILE* fptr;
-    fptr = fopen(argv[1], "r");
-    if(fptr == NULL){
-        ERR("fopen");
-    }
-    parser(fptr);
-    fclose(fptr);
 }
