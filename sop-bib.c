@@ -21,6 +21,11 @@ struct Book{
 
 }typedef book_t;
 
+struct DBentry{
+    int size;
+    char arr[64];
+}typedef DBentry_t;
+
 // join 2 path. returned pointer is for newly allocated memory and must be freed
 char* join_paths(const char* path1, const char* path2)
 {
@@ -149,9 +154,56 @@ int walk(const char *path, const struct stat *s, int type, struct FTW *f)
 }
 
 
-
+void open_DB(char* database_path){
+    int DBfd;
+    DBfd = open(database_path, O_RDONLY);
+    if(DBfd == -1){
+        ERR("open");
+    }
+    struct stat s;
+    stat(database_path, &s);
+    size_t size = s.st_size;
+    if(size%68 != 0){
+        printf("%ld\n", size);
+        ERR("size!");
+    }
+    else{
+        int num_entries = size/68;
+        struct iovec* storage = malloc(num_entries*sizeof(struct iovec));
+        DBentry_t* storage_entry = malloc(num_entries*sizeof(DBentry_t));
+        for(int i = 0; i < num_entries; i++){
+            storage[i].iov_base = &storage_entry[i];
+            storage[i].iov_len = 68;
+        }
+        readv(DBfd, storage, num_entries);
+        if(chdir("index/by-title"))
+            ERR("chdir");
+        for(int i = 0; i < num_entries; i++){
+            struct stat s2;
+            int res = stat(storage_entry[i].arr, &s2);
+            
+            // int fd = open(storage_entry[i].arr, O_CREAT | O_EXCL);
+            if(res == -1){
+                if(errno == ENOENT){
+                    printf("Book %s is missing\n", storage_entry[i].arr);
+                }
+            }
+            else{
+                if(s2.st_size != storage_entry[i].size){
+                    printf("Book %s size mismatch (%ld vs %d).\n", storage_entry[i].arr, s2.st_size, storage_entry[i].size);
+                }
+            }
+        }
+        free(storage);
+        free(storage_entry);
+    }
+    close(DBfd);
+}
 
 int main(int argc, char** argv) { 
+    if(argc != 2){
+        usage(argc, argv);
+    }
     if(mkdir("index", 0755) == -1)
         ERR("mkdir");
     if(mkdir("index/by_visible_title", 0755) == -1)
@@ -163,4 +215,5 @@ int main(int argc, char** argv) {
     if(nftw("library", walk, 100, FTW_PHYS) != 0){
         ERR("nftw");
     }
+    open_DB(argv[1]);
 }
