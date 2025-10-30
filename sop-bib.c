@@ -13,6 +13,14 @@
 
 #define ERR(source) (perror(source), fprintf(stderr, "%s:%d\n", __FILE__, __LINE__), exit(EXIT_FAILURE))
 
+
+struct Book{
+    char* title;
+    char* author;
+    char* genre;
+
+}typedef book_t;
+
 // join 2 path. returned pointer is for newly allocated memory and must be freed
 char* join_paths(const char* path1, const char* path2)
 {
@@ -44,24 +52,7 @@ void usage(int argc, char** argv)
     exit(EXIT_FAILURE);
 }
 
-
-int walk(const char *name, const struct stat *s, int type, struct FTW *f)
-{
-    if(type == FTW_F){
-        if(chdir("index/by_visible_title") == -1){
-            ERR("chdir");
-        }
-        char* str = join_paths("../../",name);
-        symlink(str, &name[f->base]);
-        if(chdir("../..") == -1){
-            ERR("chdir");
-        }
-        free(str);
-    }
-    return 0;
-}
-
-void parser(FILE* fptr){
+book_t parser(FILE* fptr){
     char* lineptr = NULL;
     size_t n = -1;
     char* token;
@@ -107,15 +98,67 @@ void parser(FILE* fptr){
     else{
         printf("genre missing!\n");
     }
-    free(author);
-    free(title);
-    free(genre);
+    book_t book;
+    book.title = title;
+    book.author = author;
+    book.genre = genre;
+    return book;
 }
+
+
+int walk(const char *path, const struct stat *s, int type, struct FTW *f)
+{
+    if(type == FTW_F){
+        if(chdir("index/by_visible_title") == -1){
+            ERR("chdir");
+        }
+        char* str = join_paths("../../",path);
+        symlink(str, &path[f->base]);
+        if(chdir("../..") == -1){
+            ERR("chdir");
+        }
+        free(str);
+        FILE *fptr;
+        fptr = fopen(path, "r");
+        if(fptr == NULL){
+            ERR("fopen");
+        }
+        book_t book = parser(fptr);
+        fclose(fptr);
+        char trun_title[65];
+        if(book.title != NULL){
+            if(chdir("index/by-title") == -1){
+                ERR("chdir");
+            }
+            strncpy(trun_title, book.title, 64);
+            trun_title[64] = '\0';
+            char* str2 = join_paths("../../",path);
+            symlink(str2, trun_title);
+            if(chdir("../..") == -1){
+                ERR("chdir");
+            }
+            free(str2);
+        }
+        free(book.author);
+        free(book.title);
+        free(book.genre);
+
+        
+    }
+    return 0;
+}
+
+
+
 
 int main(int argc, char** argv) { 
     if(mkdir("index", 0755) == -1)
         ERR("mkdir");
     if(mkdir("index/by_visible_title", 0755) == -1)
+        ERR("mkdir");
+    if(mkdir("index/by-title", 0755) == -1)
+        ERR("mkdir");
+    if(mkdir("index/by-genre", 0755) == -1)
         ERR("mkdir");
     if(nftw("library", walk, 100, FTW_PHYS) != 0){
         ERR("nftw");
